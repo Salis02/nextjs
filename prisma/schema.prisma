@@ -1,0 +1,114 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum RoleName {
+  ADMIN // Full access
+  AUTHOR // Can create/edit own posts
+  VIEWER // Read-only
+}
+
+// 🔐 ENUM untuk Permission (opsional, untuk granular control)
+enum Permission {
+  POST_CREATE
+  POST_EDIT_OWN
+  POST_EDIT_ALL
+  POST_DELETE_OWN
+  POST_DELETE_ALL
+  USER_MANAGE
+}
+
+// 👤 Model User - Authentication core
+model User {
+  id            String    @id @default(uuid()) @db.Uuid
+  email         String    @unique @map("email_address")
+  passwordHash  String    @map("password_hash") // Hashed password
+  emailVerified DateTime? @map("email_verified")
+
+  // Metadata
+  isActive    Boolean   @default(true)
+  lastLoginAt DateTime? @map("last_login_at")
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  profile Profile?
+  roles   Role[]   @relation("UserRoles")
+  posts   Post[]
+
+  @@index([email])
+  @@map("users")
+}
+
+// 📇 Model Profile - Extended user data (1:1 with User)
+model Profile {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @unique @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Personal info
+  firstName String? @map("first_name")
+  lastName  String? @map("last_name")
+  avatarUrl String? @map("avatar_url")
+  bio       String?
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("profiles")
+}
+
+// 🎭 Model Role - Master data for RBAC
+model Role {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        RoleName @unique
+  description String?
+
+  // Permissions yang dimiliki role ini (many-to-many)
+  permissions Permission[]
+
+  // Users yang punya role ini (many-to-many implicit)
+  users User[] @relation("UserRoles")
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("roles")
+}
+
+// 📝 Model Post - Contoh konten yang di-manage RBAC
+model Post {
+  id        String  @id @default(uuid()) @db.Uuid
+  title     String
+  slug      String  @unique
+  content   String  @db.Text
+  published Boolean @default(false)
+
+  // Author
+  authorId String @db.Uuid
+  author   User   @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  // Timestamps
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  publishedAt DateTime? @map("published_at")
+
+  @@index([authorId])
+  @@index([slug])
+  @@index([published, createdAt])
+  @@map("posts")
+}
